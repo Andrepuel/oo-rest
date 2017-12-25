@@ -1,0 +1,1 @@
+declare const expect: (value: any) => any;

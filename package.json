@@ -1,0 +1,27 @@
+{
+  "name": "sagan-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prestart": "tsc",
+    "start": "node js/index.js",
+    "watch": "nodemon -e ts -w ./src --exec \"npm test && npm start\"",
+    "pretest": "tslint -p tslint.json -t stylish",
+    "test": "mocha -r ts-node/register -r test/setup.js src/**/*.spec.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/chai": "^4.0.10",
+    "@types/mocha": "^2.2.45",
+    "chai": "^4.1.2",
+    "dirty-chai": "^2.0.1",
+    "mocha": "^4.0.1",
+    "nodemon": "^1.14.3",
+    "ts-node": "^4.1.0",
+    "tslint": "^5.8.0",
+    "typescript": "^2.6.2"
+  }
+}
