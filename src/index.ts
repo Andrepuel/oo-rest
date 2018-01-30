@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { IncomingHttpHeaders, IncomingMessage } from 'http';
 import * as process from 'process';
 import * as restify from 'restify';
 import * as websocket from 'websocket';
@@ -14,9 +15,14 @@ function nothrowf(x: () => Promise<any>) {
     nothrow(x());
 }
 
+export interface IRequest {
+    path: string[];
+    headers: IncomingHttpHeaders;
+}
+
 export interface IMessageHandler {
     resultType: 'message-handler';
-    start(sendMsg: (msg: string) => Promise<void>, close: (error: number, reason: string) => Promise<void>);
+    start(sendMsg: (msg: string) => Promise<void>, close: (error?: number, reason?: string) => Promise<void>);
     msg(msg: string): Promise<void>;
     closed(reason: number, message: string): Promise<void>;
 }
@@ -38,10 +44,9 @@ export class OoServer {
     }
 
     public handle(req: restify.Request, res: restify.Response, next: restify.Next) {
-        const url = req.getUrl().pathname.split('/').filter((x) => x.length > 0);
         nothrowf(async () => {
             try {
-                const r = await this.findRoute(url, req.method, req.body || req.query);
+                const r = await this.findRoute(req, req.method, req.body || req.query);
                 if (r === null) {
                     return res.send(404);
                 }
@@ -57,11 +62,10 @@ export class OoServer {
     }
 
     public async handleWs(req: websocket.request) {
-        const url = req.httpRequest.url.split('/').filter((x) => x.length > 0);
         nothrowf(async () => {
             let conn: websocket.connection&IWebsocketExtra = null;
             try {
-                const r = await this.findRoute(url, 'ws') as IMessageHandler;
+                const r = await this.findRoute(req.httpRequest, 'ws') as IMessageHandler;
                 if (r === null) {
                     return req.reject(404);
                 }
@@ -96,16 +100,21 @@ export class OoServer {
         });
     }
 
-    public async findRoute(url: string[], method: string, body?: any) {
+    public async findRoute(req: IncomingMessage, method: string, body?: any) {
+        let url = req.url.split('?', 1)[0].split('/').filter((x) => x.length > 0);
+
         if (url.length === 0) {
             url = [''];
         }
 
+        const reqPub: IRequest = {path: url.slice(1), headers: req.headers};
+
         const route = this[method.toLowerCase() + '_' + url[0]] || this['any_' + url[0]];
         if (route) {
-            const x = await Promise.resolve().then(() => route.apply(this, [body]));
+            const x = await Promise.resolve().then(() => route.apply(this, [body, reqPub]));
             if (x instanceof OoServer) {
-                return x.findRoute(url.slice(1), method);
+                req.url = '/' + reqPub.path.join('/');
+                return x.findRoute(req, method);
             }
             return x;
         } else {

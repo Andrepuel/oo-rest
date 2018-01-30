@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as restify from 'restify';
 import { URL } from 'url';
 import * as websocket from 'websocket';
-import { IMessageHandler, OoServer } from './index';
+import { IMessageHandler, IRequest, OoServer } from './index';
 
 function tick(): Promise<void> {
     return new Promise((ok) => setTimeout(ok, 10));
@@ -19,7 +19,7 @@ async function request(urlStr: string, method: 'GET'|'PUT' = 'GET', sendBody?: a
             },
             hostname: url.hostname,
             method,
-            path: '/' + url.href.split('/', 4)[3],
+            path: url.pathname + url.search,
             port: url.port,
         }, ok);
 
@@ -34,6 +34,7 @@ async function request(urlStr: string, method: 'GET'|'PUT' = 'GET', sendBody?: a
         response.on('end', ok);
         response.on('error', err);
     });
+    expect(response.statusCode).to.be.equal(200);
     expect(response.headers['content-type']).to.be.equal('application/json');
 
     return {response, body: JSON.parse(body)};
@@ -86,6 +87,42 @@ class TestServer extends OoServer {
     public async any_echo(obj: IPingPong): Promise<IPingPong> {
         obj.pong += 1;
         return obj;
+    }
+
+    public async any_hop(_: any, path: IRequest) {
+        assert(path.path.length > 0);
+        return new HopServer(path.path.shift());
+    }
+
+    public async get_ct(_: any, req: IRequest): Promise<string> {
+        return req.headers['content-type'];
+    }
+}
+
+class HopServer extends OoServer {
+    constructor(private hop: string) {
+        super();
+    }
+
+    public async get_() {
+        return this.hop;
+    }
+
+    public async ws_(): Promise<IMessageHandler> {
+        return {
+            closed: async () => { return; },
+            msg: null,
+            resultType: 'message-handler',
+            start: async (msg, close) => {
+                try {
+                    await tick();
+                    await msg(this.hop);
+                    await close();
+                } catch (e) {
+                    assert(false);
+                }
+            },
+        };
     }
 }
 
@@ -217,6 +254,27 @@ describe('OoServer', () => {
         expect(pong.ping).to.be.equal('hello');
         expect(pong.pong).to.be.equal('31');
     });
+
+    it('should receive manipulable path as second argument', async () => {
+        const result = await request('http://127.0.0.1:8080/hop/bola');
+        expect(result.body).to.be.equal('bola');
+
+        const conn = await connect('http://127.0.0.1:8080/hop/gato');
+        let messageReceived = false;
+        conn.on('message', (message) => {
+            assert(!messageReceived);
+            expect(message.utf8Data).to.be.equal('gato');
+            messageReceived = true;
+        });
+        await new Promise((ok) => conn.on('close', ok));
+        expect(messageReceived).to.be.true();
+    });
+
+    it('will receive the headers as well', async () => {
+        const result = await request('http://127.0.0.1:8080/ct');
+        expect(result.body).to.be.equal('application/json');
+    });
+
     afterEach(async () => {
         await new Promise((ok) => server.close(ok));
     });
