@@ -1,5 +1,7 @@
+import * as assert from 'assert';
 import * as http from 'http';
 import * as restify from 'restify';
+import { URL } from 'url';
 import * as websocket from 'websocket';
 import { IMessageHandler, OoServer } from './index';
 
@@ -7,9 +9,24 @@ function tick(): Promise<void> {
     return new Promise((ok) => setTimeout(ok, 10));
 }
 
-async function request(url: string): Promise<{response: http.IncomingMessage, body: any}> {
+async function request(urlStr: string, method: 'GET'|'PUT' = 'GET', sendBody?: any)
+: Promise<{response: http.IncomingMessage, body: any}> {
+    const url = new URL(urlStr);
     const response = await new Promise<http.IncomingMessage>((ok) => {
-        return http.get(url, ok);
+        const req = http.request({
+            headers: {
+                'content-type': 'application/json',
+            },
+            hostname: url.hostname,
+            method,
+            path: '/' + url.href.split('/', 4)[3],
+            port: url.port,
+        }, ok);
+
+        if (sendBody) {
+            req.write(JSON.stringify(sendBody));
+        }
+        req.end();
     });
     let body = '';
     response.on('data', (chunk) => body = body + (chunk as string));
@@ -38,6 +55,11 @@ class TestSubPath extends OoServer {
     }
 }
 
+interface IPingPong {
+    ping: string;
+    pong: string;
+}
+
 class TestServer extends OoServer {
     public handler: IMessageHandler;
 
@@ -59,6 +81,11 @@ class TestServer extends OoServer {
 
     public async ws_listen(): Promise<IMessageHandler> {
         return this.handler;
+    }
+
+    public async any_echo(obj: IPingPong): Promise<IPingPong> {
+        obj.pong += 1;
+        return obj;
     }
 }
 
@@ -174,6 +201,22 @@ describe('OoServer', () => {
         expect(clientClosed).to.be.equal(true);
     });
 
+    it('should receive request body as first argument', async () => {
+        const ping: IPingPong = {ping: 'hello', pong: '2'};
+        const result = await request('http://127.0.0.1:8080/echo', 'PUT', ping);
+        const pong: IPingPong = result.body as IPingPong;
+
+        expect(pong.ping).to.be.equal('hello');
+        expect(pong.pong).to.be.equal('21');
+    });
+
+    it('should receive query as first argument', async () => {
+        const result = await request('http://127.0.0.1:8080/echo?ping=hello&pong=3');
+        const pong: IPingPong = result.body as IPingPong;
+
+        expect(pong.ping).to.be.equal('hello');
+        expect(pong.pong).to.be.equal('31');
+    });
     afterEach(async () => {
         await new Promise((ok) => server.close(ok));
     });

@@ -27,6 +27,8 @@ interface IWebsocketExtra {
 
 export class OoServer {
     public setup(s: restify.Server): void {
+        s.use(restify.plugins.bodyParser());
+        s.use(restify.plugins.queryParser());
         s.get('.*', this.handle.bind(this));
         s.put('.*', this.handle.bind(this));
         s.post('.*', this.handle.bind(this));
@@ -36,16 +38,17 @@ export class OoServer {
     }
 
     public handle(req: restify.Request, res: restify.Response, next: restify.Next) {
-        const url = req.url.split('/').filter((x) => x.length > 0);
+        const url = req.getUrl().pathname.split('/').filter((x) => x.length > 0);
         nothrowf(async () => {
             try {
-                const r = await this.findRoute(url, req.method);
+                const r = await this.findRoute(url, req.method, req.body || req.query);
                 if (r === null) {
                     return res.send(404);
                 }
 
                 res.send(r);
             } catch (e) {
+                console.error(e);
                 res.send(e);
             } finally {
                 next();
@@ -93,14 +96,14 @@ export class OoServer {
         });
     }
 
-    public async findRoute(url: string[], method: string) {
+    public async findRoute(url: string[], method: string, body?: any) {
         if (url.length === 0) {
             url = [''];
         }
 
         const route = this[method.toLowerCase() + '_' + url[0]] || this['any_' + url[0]];
         if (route) {
-            const x = await Promise.resolve().then(() => route.apply(this));
+            const x = await Promise.resolve().then(() => route.apply(this, [body]));
             if (x instanceof OoServer) {
                 return x.findRoute(url.slice(1), method);
             }
