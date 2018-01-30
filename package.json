@@ -13,12 +13,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "restify": "^6.3.4"
+    "restify": "^6.3.4",
+    "websocket": "^1.0.25"
   },
   "devDependencies": {
     "@types/chai": "^4.0.10",
     "@types/mocha": "^2.2.45",
     "@types/restify": "^5.0.6",
+    "@types/websocket": "0.0.36",
     "chai": "^4.1.2",
     "dirty-chai": "^2.0.1",
     "mocha": "^4.0.1",
