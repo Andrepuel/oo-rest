@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as restify from 'restify';
 import { URL } from 'url';
 import * as websocket from 'websocket';
-import { IMessageHandler, IRequest, OoServer } from './index';
+import { IMessageHandler, IRequest, OoServer } from './oo-server';
 
 function tick(): Promise<void> {
     return new Promise((ok) => setTimeout(ok, 10));
