@@ -20,9 +20,14 @@ export interface IRequest {
     headers: IncomingHttpHeaders;
 }
 
+export interface IMessageHandlerOutput {
+    close: (error?: number, reason?: string) => Promise<void>;
+    sendMsg: (msg: string) => Promise<void>;
+    ping: (data: string) => Promise<void>;
+}
 export interface IMessageHandler {
     resultType: 'message-handler';
-    start(sendMsg: (msg: string) => Promise<void>, close: (error?: number, reason?: string) => Promise<void>);
+    start(out: IMessageHandlerOutput);
     msg(msg: string): Promise<void>;
     closed(reason: number, message: string): Promise<void>;
 }
@@ -73,15 +78,20 @@ export class OoServer {
                 assert.equal(r.resultType, 'message-handler');
                 conn = req.accept() as (websocket.connection&IWebsocketExtra);
                 conn.handler = r;
-                conn.handler.start(async (msg) => {
-                    conn.sendUTF(msg);
-                },
-                async (error, reason) => {
-                    if (error) {
-                        conn.drop(error, reason);
-                    } else {
-                        conn.close();
-                    }
+                conn.handler.start({
+                    close: async (error, reason) => {
+                        if (error) {
+                            conn.drop(error, reason);
+                        } else {
+                            conn.close();
+                        }
+                    },
+                    ping: async (data: string) => {
+                        conn.ping(data);
+                    },
+                    sendMsg: async (msg) => {
+                        conn.sendUTF(msg);
+                    },
                 });
                 conn.on('message', (data) => nothrowf(async () => {
                     await conn.handler.msg(data.utf8Data);

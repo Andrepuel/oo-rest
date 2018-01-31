@@ -113,11 +113,11 @@ class HopServer extends OoServer {
             closed: async () => { return; },
             msg: null,
             resultType: 'message-handler',
-            start: async (msg, close) => {
+            start: async (out) => {
                 try {
                     await tick();
-                    await msg(this.hop);
-                    await close();
+                    await out.sendMsg(this.hop);
+                    await out.close();
                 } catch (e) {
                     assert(false);
                 }
@@ -160,8 +160,8 @@ describe('OoServer', () => {
                 received.push(msg);
             },
             resultType: 'message-handler',
-            start: async (a1, a2) => {
-                sendMsg = a1;
+            start: async (out) => {
+                sendMsg = out.sendMsg;
             },
         };
         const ws = await connect('http://127.0.0.1:8080/listen');
@@ -194,8 +194,8 @@ describe('OoServer', () => {
             },
             msg: null,
             resultType: 'message-handler',
-            start: async (a1, a2) => {
-                close = a2;
+            start: async (out) => {
+                close = out.close;
             },
         };
 
@@ -220,8 +220,8 @@ describe('OoServer', () => {
             },
             msg: null,
             resultType: 'message-handler',
-            start: async (a1, a2) => {
-                close = a2;
+            start: async (out) => {
+                close = out.close;
             },
         };
 
@@ -273,6 +273,21 @@ describe('OoServer', () => {
     it('will receive the headers as well', async () => {
         const result = await request('http://127.0.0.1:8080/ct');
         expect(result.body).to.be.equal('application/json');
+    });
+
+    it('is possible to ping the client', async () => {
+        rest.handler = {
+            closed: async () => { return; },
+            msg: null,
+            resultType: 'message-handler',
+            start: async (out) => {
+                await tick();
+                await out.ping('hello');
+            },
+        };
+        const conn = await connect('http://127.0.0.1:8080/listen');
+        await new Promise((ok) => (conn as any).on('ping', ok));
+        conn.close();
     });
 
     afterEach(async () => {
